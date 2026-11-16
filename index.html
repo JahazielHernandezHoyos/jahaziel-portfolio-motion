@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jahaziel Hernández — Ingeniero backend e IA</title>
+    <meta
+      name="description"
+      content="Ingeniero backend que lleva agentes de IA a producción y los hace aguantar. Colombia."
+    />
+    <meta name="theme-color" content="#000000" />
+  </head>
+  <body class="is-loading">
+    <div class="preloader" aria-hidden="true">
+      <span class="preloader-label">Cargando</span>
+      <div class="preloader-bar"><i></i></div>
+    </div>
+
+    <canvas class="gl" aria-hidden="true"></canvas>
+
+    <header class="site-header">
+      <a class="brand" href="#inicio">Jahaziel Hernández</a>
+      <nav class="header-nav">
+        <a href="#contacto">Hablemos</a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu">Menú</button>
+      </nav>
+    </header>
+
+    <div class="menu" id="menu" hidden>
+      <nav aria-label="Secciones">
+        <a href="#inicio">Inicio</a>
+        <a href="#trabajo">Por empresa</a>
+        <a href="#sobre-mi">Sobre mí</a>
+        <a href="#mas">Más cosas</a>
+        <a href="#trayectoria">Trayectoria</a>
+        <a href="#contacto">Contacto</a>
+      </nav>
+    </div>
+
+    <main>
+      <section class="hero" id="inicio" data-gl="hero">
+        <img class="hero-fallback" src="/portrait.jpg" alt="Jahaziel Hernández en la montaña" />
+        <div class="hero-name">
+          <h1 data-scramble>Jahaziel Hernández</h1>
+          <p>Ingeniero backend e IA <span>Colombia</span></p>
+        </div>
+        <p class="hero-intro" data-scramble>
+          Llevo agentes de IA a producción y me encargo de que aguanten: que no se caigan, que respondan rápido y que cuesten
+          menos.
+        </p>
+        <p class="hero-hint">Desliza</p>
+      </section>
+
+      <section class="work" id="trabajo">
+        <aside class="work-index">
+          <h2>Lo mejor de cada empresa</h2>
+          <ol data-company-index></ol>
+        </aside>
+        <div class="work-list" data-companies></div>
+      </section>
+
+      <div class="corridor" data-gl="corridor">
+        <section class="chapter" id="sobre-mi" data-tint="about">
+          <div class="chapter-body">
+            <h2 data-scramble>Sobre mí</h2>
+            <p>
+              Soy de Marinilla, Antioquia. Empecé en una Tecnoacademia del SENA entrenando redes neuronales para la lengua de
+              señas y hoy diseño y opero los backends que ponen a trabajar agentes de IA con clientes reales.
+            </p>
+            <p>
+              Lo que más disfruto es encontrar la causa raíz: reproducir la falla, medirla y arreglarla con evidencia. En los
+              últimos seis meses mergeé más de 170 PRs en una docena de servicios.
+            </p>
+          </div>
+        </section>
+
+        <section class="chapter" id="mas" data-tint="more">
+          <div class="chapter-body">
+            <h2 data-scramble>Más cosas que hice</h2>
+            <ul class="more-list">
+              <li>
+                <a href="https://github.com/JahazielHernandezHoyos/openwahi" target="_blank" rel="noreferrer">openwahi</a>, el motor de
+                Wahi liberado como open source: agentes de soporte para WhatsApp con RAG y LangGraph.
+              </li>
+              <li>
+                <a href="https://www.youtube.com/channel/UCAcWYVxjxCIh8XybsaVluMw" target="_blank" rel="noreferrer">Curioso Código</a>,
+                mi canal de YouTube sobre programación, con 33 videos.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="chapter" id="trayectoria" data-tint="path">
+          <div class="chapter-body">
+            <h2 data-scramble>Trayectoria</h2>
+            <ol class="timeline">
+              <li><span>2026 – hoy</span>Backend e IA en Baubap, fintech de México (remoto)</li>
+              <li><span>2026 – hoy</span>Fundador de Wahi</li>
+              <li><span>2024 – 2026</span>Tech lead backend en Jump Cube Technologies, Colombia</li>
+              <li><span>2023 – 2024</span>Tech lead en Let's Do It Now, Nueva York</li>
+              <li><span>2022 – 2023</span>Líder técnico backend en Peacedev, Colombia</li>
+              <li><span>2022</span>Ingeniero backend en 4Plus Ingenieros, España</li>
+              <li><span>2021 – 2022</span>Investigación y docencia en Tecnoacademia SENA</li>
+            </ol>
+          </div>
+        </section>
+
+        <section class="chapter" id="contacto" data-tint="contact">
+          <div class="chapter-body">
+            <h2 data-scramble>Hablemos de tu próximo sistema</h2>
+            <p>Escríbeme y te respondo con una primera idea de arquitectura.</p>
+            <a class="contact-mail" href="mailto:jahazielhernandezhoyoz@gmail.com">jahazielhernandezhoyoz@gmail.com</a>
+            <ul class="contact-links">
+              <li><a href="https://github.com/JahazielHernandezHoyos" target="_blank" rel="noreferrer">GitHub</a></li>
+              <li><a href="https://www.linkedin.com/in/jahaziel-anthony-h-6586b5139/" target="_blank" rel="noreferrer">LinkedIn</a></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <footer class="site-footer">
+        <span>Jahaziel Hernández</span>
+        <span>Marinilla, Colombia, 2026</span>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
