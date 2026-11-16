@@ -105,7 +105,7 @@ function crash(ctx, s, t) {
   ctx.lineTo(x1, top);
   ctx.stroke();
   ctx.setLineDash([]);
-  text(ctx, 'límite', x0, top - 18, { stretch: 'condensed', color: s.accent });
+  text(ctx, s.labels.limit, x0, top - 18, { stretch: 'condensed', color: s.accent });
 
   const crashX = lerp(x0, x1, 0.46);
   const a = seg(t, 0.04, 0.42);
@@ -126,7 +126,7 @@ function crash(ctx, s, t) {
       ctx.moveTo(crashX, top);
       ctx.lineTo(crashX, bottom);
       ctx.stroke();
-      text(ctx, 'se satura', crashX + 18, top + 60, { weight: 700, stretch: 'condensed', color: s.accent });
+      text(ctx, s.labels.saturates, crashX + 18, top + 60, { weight: 700, stretch: 'condensed', color: s.accent });
     }
   }
   const b = seg(t, 0.48, 0.96);
@@ -201,7 +201,7 @@ function parallel(ctx, s, t) {
   const now = total * seg(t, 0.04, 0.86);
   const longest = Math.max(...s.lanes);
 
-  text(ctx, 'Uno tras otro', x0, 230, { weight: 600, color: s.fg });
+  text(ctx, s.labels.serial, x0, 230, { weight: 600, color: s.fg });
   text(ctx, `${Math.round(Math.min(now, total))} s`, x1, 230, { weight: 700, color: s.fg, align: 'right' });
   ctx.fillStyle = s.track;
   ctx.fillRect(x0, 252, x1 - x0, 60);
@@ -214,7 +214,7 @@ function parallel(ctx, s, t) {
     ctx.fillRect(X(a), 252, X(b) - X(a), 60);
   });
 
-  text(ctx, 'En paralelo', x0, 410, { weight: 600, color: s.fg });
+  text(ctx, s.labels.parallel, x0, 410, { weight: 600, color: s.fg });
   text(ctx, `${Math.round(Math.min(now, longest))} s`, x1, 410, { weight: 700, color: s.fg, align: 'right' });
   s.lanes.forEach((len, i) => {
     const y = 432 + i * 58;
@@ -329,7 +329,7 @@ function failures(ctx, s, t) {
     ctx.fillRect(fx - 2, 200, 4, 290);
     text(ctx, s.fix, fx + 16, 220, { weight: 700, stretch: 'condensed', color: s.fg });
   }
-  text(ctx, `${count} timeouts antes`, x0, 560, { weight: 600, color: s.accent });
+  text(ctx, `${count} ${s.labels.timeoutsBefore}`, x0, 560, { weight: 600, color: s.accent });
   const a = ease(seg(t, 0.82, 1));
   subLines(ctx, s, s.sub, a, 860);
   result(ctx, s, s.result, a, { size: 300, y: 940 });
@@ -406,7 +406,7 @@ function signs(ctx, s, t) {
     ctx.fillRect(x - 11, y - 11, 22, 22);
   });
   text(ctx, 'LSC', 80, 300, { size: 230, weight: 800, stretch: 'extra-expanded', color: s.fg });
-  text(ctx, 'Lengua de señas a texto', 90, 380, { color: s.fg });
+  text(ctx, s.labels.signTitle, 90, 380, { color: s.fg });
   const vowels = ['A', 'E', 'I', 'O', 'U'];
   const lit = seg(t, 0.55, 0.95) * vowels.length;
   vowels.forEach((v, i) => {
@@ -416,7 +416,7 @@ function signs(ctx, s, t) {
     ctx.fillRect(x, 480, 96, 120);
     text(ctx, v, x + 48, 570, { size: 70, weight: 800, stretch: 'expanded', color: on ? s.bg : s.muted, align: 'center' });
   });
-  text(ctx, 'vocales reconocidas en tiempo real', 90, 680, { stretch: 'condensed', color: s.fg });
+  text(ctx, s.labels.vowels, 90, 680, { stretch: 'condensed', color: s.fg });
 }
 
 const archetypes = { race, crash, shrink, parallel, growth, share, counter, failures, stamp, signs };

@@ -11,14 +11,15 @@ const TINTS = {
 };
 const CAMERA_DISTANCE = 1200;
 const FLAT = 1e6;
-// The raymarched corridor renders at this fraction of CSS pixels and is upscaled in the composite.
-const MARCH_SCALE = 0.62;
+// The raymarched corridor renders at one of these fractions of CSS pixels and is upscaled in the
+// composite. adapt() steps down when frames are slow and back up when there is headroom.
+const MARCH_LEVELS = [0.32, 0.4, 0.5, 0.62];
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (t) => t * t * (3 - 2 * t);
 
-export function createStage({ canvas, portrait, posters, reduced }) {
+export function createStage({ canvas, portrait, posters, motion }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1, 1, 6000);
@@ -107,7 +108,7 @@ export function createStage({ canvas, portrait, posters, reduced }) {
         uCrop: { value: new THREE.Vector4(0.18, 0.02, 0.6, 0.6) },
         uBox: { value: new THREE.Vector3() },
         uSize: { value: new THREE.Vector2() },
-        uReveal: { value: reduced ? 1 : 0 },
+        uReveal: { value: motion.still ? 1 : 0 },
         uMouse: { value: new THREE.Vector2(-9, -9) },
         uGlitch: { value: 0 },
         uTime: time,
@@ -137,7 +138,7 @@ export function createStage({ canvas, portrait, posters, reduced }) {
           uTime: time,
           uHover: { value: 0 },
           uPulse: { value: 0 },
-          uEnter: { value: reduced ? 1 : 0 },
+          uEnter: { value: motion.still ? 1 : 0 },
         },
       }),
     );
@@ -148,6 +149,17 @@ export function createStage({ canvas, portrait, posters, reduced }) {
 
   let vw = 1;
   let vh = 1;
+  // Phones start one step lower; the frame-time loop settles the rest.
+  let level = window.matchMedia('(pointer: coarse)').matches ? 1 : MARCH_LEVELS.length - 1;
+  function sizeMarch() {
+    const dpr = renderer.getPixelRatio();
+    const scale = MARCH_LEVELS[level];
+    const mw = Math.max(1, Math.round(vw * scale));
+    const mh = Math.max(1, Math.round(vh * scale));
+    marchTarget.setSize(mw, mh);
+    march.material.uniforms.uToFull.value.set((vw * dpr) / mw, (vh * dpr) / mh);
+    canvas.dataset.corridorScale = scale;
+  }
   function resize() {
     vw = window.innerWidth;
     vh = window.innerHeight;
@@ -159,10 +171,24 @@ export function createStage({ canvas, portrait, posters, reduced }) {
     viewport.value.set(vw, vh);
     const dpr = renderer.getPixelRatio();
     corridor.material.uniforms.uRes.value.set(vw * dpr, vh * dpr);
-    const mw = Math.max(1, Math.round(vw * MARCH_SCALE));
-    const mh = Math.max(1, Math.round(vh * MARCH_SCALE));
-    marchTarget.setSize(mw, mh);
-    march.material.uniforms.uToFull.value.set((vw * dpr) / mw, (vh * dpr) / mh);
+    sizeMarch();
+  }
+
+  // Fed with the gap between consecutive rendered frames. Only frames that drew the corridor
+  // count; ~45 fps or worse steps down, a sustained ~58 fps steps back up.
+  const perf = { sum: 0, n: 0, marched: false };
+  function adapt(dt) {
+    if (!perf.marched) return;
+    perf.sum += dt;
+    perf.n += 1;
+    if (perf.n < 30) return;
+    const avg = perf.sum / perf.n;
+    perf.sum = 0;
+    perf.n = 0;
+    const next = avg > 22 ? level - 1 : avg < 17.5 ? level + 1 : level;
+    if (next < 0 || next >= MARCH_LEVELS.length || next === level) return;
+    level = next;
+    sizeMarch();
   }
 
   function place(mesh, r) {
@@ -176,7 +202,7 @@ export function createStage({ canvas, portrait, posters, reduced }) {
   function pointer(e) {
     look.tx = (e.clientX / vw) * 2 - 1;
     look.ty = -((e.clientY / vh) * 2 - 1);
-    if (reduced) return;
+    if (motion.still) return;
     const r = heroEl.getBoundingClientRect();
     if (e.clientY >= r.top && e.clientY <= r.bottom) {
       const u = hero.material.uniforms;
@@ -195,6 +221,7 @@ export function createStage({ canvas, portrait, posters, reduced }) {
 
   function render(seconds, velocity) {
     time.value = seconds;
+    const reduced = motion.still;
     const speed = reduced ? 0 : clamp(Math.abs(velocity), 0, 1);
 
     // Hero sheet: curls back harder as it leaves the top of the screen.
@@ -217,7 +244,7 @@ export function createStage({ canvas, portrait, posters, reduced }) {
       p.u.uVel.value = velocity;
       p.u.uRadius.value = reduced ? FLAT : vh * lerp(6, 1.3, speed);
       p.u.uBulge.value = reduced ? 0 : 0.15 + speed * 0.5;
-      if (!reduced) p.u.uEnter.value = smooth(clamp((vh - r.top) / (vh * 0.45), 0, 1));
+      p.u.uEnter.value = reduced ? 1 : smooth(clamp((vh - r.top) / (vh * 0.45), 0, 1));
     }
 
     // Corridor window: grows from a card into the full viewport, then scrolls away at the end.
@@ -225,6 +252,7 @@ export function createStage({ canvas, portrait, posters, reduced }) {
     const mu = march.material.uniforms;
     const cr = corridorEl.getBoundingClientRect();
     cu.uOn.value = cr.top < vh && cr.bottom > 0 ? 1 : 0;
+    perf.marched = cu.uOn.value > 0;
     if (cu.uOn.value) {
       const dpr = renderer.getPixelRatio();
       const cardW = Math.min(vw * 0.7, 980);
@@ -281,5 +309,5 @@ export function createStage({ canvas, portrait, posters, reduced }) {
   }
 
   resize();
-  return { resize, render, pointer, needsFrame, heroUniforms: hero.material.uniforms, posterUniforms };
+  return { resize, render, pointer, needsFrame, adapt, heroUniforms: hero.material.uniforms, posterUniforms };
 }

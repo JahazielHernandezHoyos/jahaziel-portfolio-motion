@@ -1,18 +1,41 @@
 import '@fontsource-variable/anybody/standard.css';
 import './style.css';
+import { inject } from '@vercel/analytics';
 import Lenis from 'lenis';
 import gsap from 'gsap';
-import { companies } from './content/companies.js';
+import { cases as allCases } from './content/cases.js';
+import { companies as allCompanies } from './content/companies.js';
 import { POSTER_DURATION, createPosterCanvas } from './gl/posters.js';
 import { createStage } from './gl/stage.js';
-import { installCats } from './ui/cats.js';
-import { fillPanel, renderCompanies } from './ui/companies.js';
+import { localize, ui } from './i18n.js';
+import { motion, wirePauseButton } from './motion.js';
+import { installHomeCats } from './ui/cats.js';
+import { fillPanel, hydrateCompanies } from './ui/companies.js';
 import { scramble } from './ui/scramble.js';
 
-const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+inject();
+
+const lang = document.documentElement.lang === 'en' ? 'en' : 'es';
+const t = ui(lang);
+const companies = localize(allCompanies, lang);
+const cases = localize(allCases, lang);
 const body = document.body;
 const bar = document.querySelector('.preloader-bar i');
-const cats = installCats({ reduced });
+const cats = installHomeCats(t.cats);
+wirePauseButton(t.nav);
+
+// Smooth scrolling runs only while motion is on; pausing drops back to native scrolling.
+const scroller = {
+  lenis: null,
+  sync() {
+    if (motion.still && this.lenis) {
+      this.lenis.destroy();
+      this.lenis = null;
+    } else if (!motion.still && !this.lenis) {
+      this.lenis = new Lenis({ lerp: 0.085, wheelMultiplier: 0.9 });
+    }
+  },
+};
 
 // Tweens register here so the render loop knows to keep drawing while they run.
 const active = new Set();
@@ -71,11 +94,11 @@ async function boot() {
   step();
   const portrait = await loadImage('/portrait.jpg');
   step();
-  const cards = renderCompanies(companies);
+  const cards = hydrateCompanies(companies);
   for (const card of cards) {
     card.poster = createPosterCanvas();
-    card.spec = (i) => ({ ...card.company.palette, ...card.company.achievements[i].poster });
-    card.poster.paint(card.spec(0), reduced ? 1 : 0);
+    card.spec = (i) => ({ ...card.company.palette, labels: t.posterLabels, ...card.company.achievements[i].poster });
+    card.poster.paint(card.spec(0), motion.still ? 1 : 0);
   }
   cats.addCompanies(cards);
   step();
@@ -87,23 +110,32 @@ async function boot() {
   }
 
   const canvases = Object.fromEntries(cards.map((c) => [c.company.id, c.poster.canvas]));
-  const stage = gl ? createStage({ canvas: document.querySelector('.gl'), portrait, posters: canvases, reduced }) : null;
+  const stage = gl ? createStage({ canvas: document.querySelector('.gl'), portrait, posters: canvases, motion }) : null;
 
-  const lenis = reduced ? null : new Lenis({ lerp: 0.085, wheelMultiplier: 0.9 });
+  scroller.sync();
   let velocity = 0;
   let lastScroll = -1;
   let dirty = true;
 
+  // Time since the previous tick, counted only when that tick also rendered: idle gaps (no frame
+  // drawn) never look like slow frames, and genuinely slow frames are never filtered out.
+  let prevTick = 0;
+  let renderedPrev = false;
   function tick(ms) {
+    const lenis = scroller.lenis;
     lenis?.raf(ms);
     const raw = lenis ? clampVel(lenis.velocity / 45) : 0;
     velocity += (raw - velocity) * 0.12;
     if (Math.abs(velocity) < 0.0005) velocity = 0;
     const y = window.scrollY;
-    if (stage && (dirty || y !== lastScroll || velocity !== 0 || active.size > 0 || stage.needsFrame())) {
+    const render = stage && (dirty || y !== lastScroll || velocity !== 0 || active.size > 0 || stage.needsFrame());
+    if (render) {
+      if (renderedPrev) stage.adapt(ms - prevTick);
       stage.render(ms / 1000, velocity);
       dirty = false;
     }
+    renderedPrev = render;
+    prevTick = ms;
     lastScroll = y;
     requestAnimationFrame(tick);
   }
@@ -116,8 +148,17 @@ async function boot() {
   });
   window.addEventListener('pointermove', (e) => stage?.pointer(e), { passive: true });
 
-  wireAnchors(lenis);
-  wireMenu(lenis);
+  motion.onChange(() => {
+    scroller.sync();
+    if (motion.still) {
+      gsap.globalTimeline.getChildren(true, true, false).forEach((tw) => tw.progress(1));
+      cards.forEach((c) => c.finish?.());
+    }
+    dirty = true;
+  });
+
+  wireAnchors();
+  wireMenu();
   wireIndex();
   wireCompanies(stage, cards);
   wireReveals();
@@ -133,24 +174,28 @@ function clampVel(v) {
 }
 
 function intro(stage) {
+  const still = motion.still;
   const pre = document.querySelector('.preloader');
   gsap.to(pre, {
     autoAlpha: 0,
-    duration: reduced ? 0 : 0.5,
-    delay: reduced ? 0 : 0.15,
+    duration: still ? 0 : 0.5,
+    delay: still ? 0 : 0.15,
     onComplete: () => {
       pre.remove();
       body.classList.remove('is-loading');
     },
   });
-  if (stage && !reduced) animate(stage.heroUniforms.uReveal, { value: 1, duration: 2.8, delay: 0.3, ease: 'power2.inOut' });
+  if (stage) {
+    if (still) stage.heroUniforms.uReveal.value = 1;
+    else animate(stage.heroUniforms.uReveal, { value: 1, duration: 2.8, delay: 0.3, ease: 'power2.inOut' });
+  }
   const heroText = document.querySelectorAll('.hero [data-scramble]');
-  heroText.forEach((el, i) => scramble(el, { delay: reduced ? 0 : 900 + i * 250, reduced }));
-  gsap.from('.hero-name p, .hero-hint', { autoAlpha: 0, duration: reduced ? 0 : 0.8, delay: reduced ? 0 : 1.6 });
-  gsap.delayedCall(reduced ? 0 : 3.3, () => cats.heroIn());
+  heroText.forEach((el, i) => scramble(el, { delay: still ? 0 : 900 + i * 250, reduced: still }));
+  gsap.from('.hero-name p, .hero-hint', { autoAlpha: 0, duration: still ? 0 : 0.8, delay: still ? 0 : 1.6 });
+  gsap.delayedCall(still ? 0 : 3.3, () => cats.heroIn());
 }
 
-function wireAnchors(lenis) {
+function wireAnchors() {
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#"]');
     if (!a) return;
@@ -158,33 +203,34 @@ function wireAnchors(lenis) {
     if (!target) return;
     e.preventDefault();
     closeMenu();
-    if (lenis) lenis.scrollTo(target, { duration: 1.6 });
+    if (scroller.lenis) scroller.lenis.scrollTo(target, { duration: 1.6 });
     else target.scrollIntoView();
     history.replaceState(null, '', a.getAttribute('href'));
   });
 }
 
 let closeMenu = () => {};
-function wireMenu(lenis) {
+function wireMenu() {
   const toggle = document.querySelector('.menu-toggle');
   const menu = document.getElementById('menu');
   const open = () => {
+    const d = motion.still ? 0 : 1;
     menu.hidden = false;
     toggle.setAttribute('aria-expanded', 'true');
-    toggle.textContent = 'Cerrar';
-    lenis?.stop();
-    gsap.fromTo(menu, { clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0 0 0% 0)', duration: reduced ? 0 : 0.6, ease: 'power3.inOut' });
-    gsap.fromTo(menu.querySelectorAll('a'), { yPercent: 100, autoAlpha: 0 }, { yPercent: 0, autoAlpha: 1, duration: reduced ? 0 : 0.5, stagger: 0.05, delay: reduced ? 0 : 0.25 });
+    toggle.textContent = toggle.dataset.close;
+    scroller.lenis?.stop();
+    gsap.fromTo(menu, { clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0 0 0% 0)', duration: 0.6 * d, ease: 'power3.inOut' });
+    gsap.fromTo(menu.querySelectorAll('a'), { yPercent: 100, autoAlpha: 0 }, { yPercent: 0, autoAlpha: 1, duration: 0.5 * d, stagger: 0.05 * d, delay: 0.25 * d });
     menu.querySelector('a').focus();
     cats.menu(true);
   };
   closeMenu = () => {
     if (menu.hidden) return;
     toggle.setAttribute('aria-expanded', 'false');
-    toggle.textContent = 'Menú';
-    lenis?.start();
+    toggle.textContent = toggle.dataset.open;
+    scroller.lenis?.start();
     cats.menu(false);
-    gsap.to(menu, { clipPath: 'inset(0 0 100% 0)', duration: reduced ? 0 : 0.45, ease: 'power3.inOut', onComplete: () => (menu.hidden = true) });
+    gsap.to(menu, { clipPath: 'inset(0 0 100% 0)', duration: motion.still ? 0 : 0.45, ease: 'power3.inOut', onComplete: () => (menu.hidden = true) });
   };
   toggle.addEventListener('click', () => (menu.hidden ? open() : closeMenu()));
   document.addEventListener('keydown', (e) => e.key === 'Escape' && closeMenu());
@@ -215,14 +261,14 @@ function wireCompanies(stage, cards) {
   const players = new Map();
   for (const card of cards) {
     const u = stage?.posterUniforms(card.media);
-    const state = { index: 0, t: reduced ? 1 : 0, tween: null };
+    const state = { index: 0, t: motion.still ? 1 : 0, tween: null };
     const kind = () => card.company.achievements[state.index].poster.kind;
     const redraw = () => {
       card.poster.paint(card.spec(state.index), state.t);
       if (u) u.uTex.value.needsUpdate = true;
     };
     const play = (force = false) => {
-      if (reduced) return;
+      if (motion.still) return;
       if (state.tween?.isActive()) {
         if (!force) return;
         state.tween.kill();
@@ -230,6 +276,12 @@ function wireCompanies(stage, cards) {
       state.t = 0;
       redraw();
       state.tween = animate(state, { t: 1, duration: POSTER_DURATION[kind()], ease: 'none', onUpdate: redraw });
+    };
+    // Pausing motion jumps every poster to its final frame (the result).
+    card.finish = () => {
+      state.tween?.kill();
+      state.t = 1;
+      redraw();
     };
     players.set(card.media, () => {
       play();
@@ -243,13 +295,13 @@ function wireCompanies(stage, cards) {
       selected = i;
       const tab = card.tabs[i];
       const to = { y: tab.offsetTop, height: tab.offsetHeight };
-      if (moving && !reduced) gsap.to(card.indicator, { ...to, duration: 0.45, ease: 'power3.inOut', overwrite: true });
+      if (moving && !motion.still) gsap.to(card.indicator, { ...to, duration: 0.45, ease: 'power3.inOut', overwrite: true });
       else gsap.set(card.indicator, to);
     };
     card.placeIndicator();
 
     const pulse = () => {
-      if (!u || reduced) return;
+      if (!u || motion.still) return;
       gsap.killTweensOf(u.uPulse);
       u.uPulse.value = 1;
       animate(u.uPulse, { value: 0, duration: 0.55, ease: 'steps(8)' });
@@ -267,9 +319,11 @@ function wireCompanies(stage, cards) {
       card.media.setAttribute('aria-label', achievement.alt);
 
       card.placeIndicator(i, true);
-      if (reduced) {
+      const fillOpts = { lang, cases, readCase: t.work.readCase };
+      if (motion.still) {
         state.index = i;
-        fillPanel(card.panel, achievement);
+        fillPanel(card.panel, achievement, fillOpts);
+        state.t = 1;
         redraw();
         return;
       }
@@ -279,7 +333,7 @@ function wireCompanies(stage, cards) {
         y: 8,
         duration: 0.16,
         onComplete: () => {
-          fillPanel(card.panel, achievement);
+          fillPanel(card.panel, achievement, fillOpts);
           gsap.to(card.panel, { autoAlpha: 1, y: 0, duration: 0.35, ease: 'power2.out' });
         },
       });
@@ -354,7 +408,7 @@ function wireReveals() {
     },
     { threshold: 0.2 },
   );
-  document.querySelectorAll('.company').forEach((c) => io.observe(c));
+  document.querySelectorAll('.company, .wahi').forEach((c) => io.observe(c));
 }
 
 function wireScramble() {
@@ -363,7 +417,7 @@ function wireScramble() {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
         io.unobserve(entry.target);
-        scramble(entry.target, { reduced });
+        scramble(entry.target, { reduced: motion.still });
       }
     },
     { rootMargin: '0px 0px -20% 0px' },
