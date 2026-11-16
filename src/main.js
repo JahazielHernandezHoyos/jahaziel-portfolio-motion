@@ -5,12 +5,14 @@ import gsap from 'gsap';
 import { companies } from './content/companies.js';
 import { POSTER_DURATION, createPosterCanvas } from './gl/posters.js';
 import { createStage } from './gl/stage.js';
+import { installCats } from './ui/cats.js';
 import { fillPanel, renderCompanies } from './ui/companies.js';
 import { scramble } from './ui/scramble.js';
 
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const body = document.body;
 const bar = document.querySelector('.preloader-bar i');
+const cats = installCats({ reduced });
 
 // Tweens register here so the render loop knows to keep drawing while they run.
 const active = new Set();
@@ -34,7 +36,15 @@ let loaded = 0;
 const TOTAL = 3;
 function step() {
   loaded += 1;
-  gsap.to(progress, { value: loaded / TOTAL, duration: 0.4, onUpdate: () => (bar.style.transform = `scaleX(${progress.value})`) });
+  cats.preloaderStep();
+  gsap.to(progress, {
+    value: loaded / TOTAL,
+    duration: 0.4,
+    onUpdate: () => {
+      bar.style.transform = `scaleX(${progress.value})`;
+      cats.preloader(progress.value);
+    },
+  });
 }
 
 function loadImage(src) {
@@ -67,6 +77,7 @@ async function boot() {
     card.spec = (i) => ({ ...card.company.palette, ...card.company.achievements[i].poster });
     card.poster.paint(card.spec(0), reduced ? 1 : 0);
   }
+  cats.addCompanies(cards);
   step();
 
   const gl = webglAvailable();
@@ -100,6 +111,7 @@ async function boot() {
 
   window.addEventListener('resize', () => {
     stage?.resize();
+    cards.forEach((c) => c.placeIndicator?.());
     dirty = true;
   });
   window.addEventListener('pointermove', (e) => stage?.pointer(e), { passive: true });
@@ -108,6 +120,7 @@ async function boot() {
   wireMenu(lenis);
   wireIndex();
   wireCompanies(stage, cards);
+  wireReveals();
   wireScramble();
 
   const wait = Math.max(0, 900 - (performance.now() - started));
@@ -134,6 +147,7 @@ function intro(stage) {
   const heroText = document.querySelectorAll('.hero [data-scramble]');
   heroText.forEach((el, i) => scramble(el, { delay: reduced ? 0 : 900 + i * 250, reduced }));
   gsap.from('.hero-name p, .hero-hint', { autoAlpha: 0, duration: reduced ? 0 : 0.8, delay: reduced ? 0 : 1.6 });
+  gsap.delayedCall(reduced ? 0 : 3.3, () => cats.heroIn());
 }
 
 function wireAnchors(lenis) {
@@ -162,12 +176,14 @@ function wireMenu(lenis) {
     gsap.fromTo(menu, { clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0 0 0% 0)', duration: reduced ? 0 : 0.6, ease: 'power3.inOut' });
     gsap.fromTo(menu.querySelectorAll('a'), { yPercent: 100, autoAlpha: 0 }, { yPercent: 0, autoAlpha: 1, duration: reduced ? 0 : 0.5, stagger: 0.05, delay: reduced ? 0 : 0.25 });
     menu.querySelector('a').focus();
+    cats.menu(true);
   };
   closeMenu = () => {
     if (menu.hidden) return;
     toggle.setAttribute('aria-expanded', 'false');
     toggle.textContent = 'Menú';
     lenis?.start();
+    cats.menu(false);
     gsap.to(menu, { clipPath: 'inset(0 0 100% 0)', duration: reduced ? 0 : 0.45, ease: 'power3.inOut', onComplete: () => (menu.hidden = true) });
   };
   toggle.addEventListener('click', () => (menu.hidden ? open() : closeMenu()));
@@ -181,7 +197,9 @@ function wireIndex() {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
         links.forEach((a) => a.removeAttribute('aria-current'));
-        links.get(entry.target.id)?.setAttribute('aria-current', 'true');
+        const link = links.get(entry.target.id);
+        link?.setAttribute('aria-current', 'true');
+        if (link) cats.indexMoved(link);
       }
     },
     { rootMargin: '-45% 0px -45% 0px' },
@@ -213,7 +231,22 @@ function wireCompanies(stage, cards) {
       redraw();
       state.tween = animate(state, { t: 1, duration: POSTER_DURATION[kind()], ease: 'none', onUpdate: redraw });
     };
-    players.set(card.media, () => play());
+    players.set(card.media, () => {
+      play();
+      cats.posterPlayed(card.company.id);
+    });
+
+    // The selected-row highlight is one block that slides between rows. Resize calls it with no
+    // arguments to snap it back under the selected tab.
+    let selected = 0;
+    card.placeIndicator = (i = selected, moving = false) => {
+      selected = i;
+      const tab = card.tabs[i];
+      const to = { y: tab.offsetTop, height: tab.offsetHeight };
+      if (moving && !reduced) gsap.to(card.indicator, { ...to, duration: 0.45, ease: 'power3.inOut', overwrite: true });
+      else gsap.set(card.indicator, to);
+    };
+    card.placeIndicator();
 
     const pulse = () => {
       if (!u || reduced) return;
@@ -224,6 +257,7 @@ function wireCompanies(stage, cards) {
 
     const select = (i) => {
       if (i === state.index) return;
+      cats.companySelected(card.company.id);
       const achievement = card.company.achievements[i];
       card.tabs.forEach((tab, k) => {
         tab.setAttribute('aria-selected', String(k === i));
@@ -232,6 +266,7 @@ function wireCompanies(stage, cards) {
       card.panel.setAttribute('aria-labelledby', card.tabs[i].id);
       card.media.setAttribute('aria-label', achievement.alt);
 
+      card.placeIndicator(i, true);
       if (reduced) {
         state.index = i;
         fillPanel(card.panel, achievement);
@@ -284,6 +319,7 @@ function wireCompanies(stage, cards) {
     const enter = () => {
       play();
       pulse();
+      cats.posterPlayed(card.company.id);
       if (u) animate(u.uHover, { value: 1, duration: 0.6, ease: 'power3.out' });
     };
     const leave = () => u && animate(u.uHover, { value: 0, duration: 0.6, ease: 'power3.out' });
@@ -304,6 +340,21 @@ function wireCompanies(stage, cards) {
     { threshold: 0.6 },
   );
   players.forEach((_, el) => io.observe(el));
+}
+
+// Company names slide up out of a mask and the top 3 rows follow, once per company.
+function wireReveals() {
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        io.unobserve(entry.target);
+        entry.target.classList.add('is-in');
+      }
+    },
+    { threshold: 0.2 },
+  );
+  document.querySelectorAll('.company').forEach((c) => io.observe(c));
 }
 
 function wireScramble() {

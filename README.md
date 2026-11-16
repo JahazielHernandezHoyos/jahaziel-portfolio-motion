@@ -14,8 +14,9 @@ npm run build    # dist/
 - `src/content/companies.js`: empresas y su top 3 de logros, ordenado por impacto (el primero es el mayor). Cada logro trae su texto, su cifra corta para la lista y el `poster` que anima esa cifra.
 - `src/ui/companies.js`: arma la sección por empresa (póster, pestañas del top 3 y panel del logro activo).
 - `src/gl/posters.js`: tipos de animación reutilizables (`race`, `crash`, `shrink`, `parallel`, `growth`, `share`, `counter`, `failures`, `stamp`, `signs`). Cada uno pinta `paint(spec, t)` con `t` de 0 (antes) a 1 (resultado). Corre una vez al entrar en pantalla, otra vez en hover o foco, y cada vez que eliges otro logro de la misma empresa.
-- `src/gl/shaders.js`: curvatura de tambor ligada a la velocidad del scroll, retrato pixelado del hero, glitch de las tarjetas y corredor raymarched.
-- `src/gl/stage.js`: sincroniza los planos WebGL con los rectángulos del DOM y el tinte de cada capítulo (`data-tint`).
+- `src/gl/shaders.js`: curvatura de tambor ligada a la velocidad del scroll, retrato pixelado del hero, glitch de las tarjetas y el pasillo del centro de datos.
+- `src/gl/stage.js`: sincroniza los planos WebGL con los rectángulos del DOM y el tinte de cada capítulo (`data-tint`). El pasillo se raymarchea a menor resolución (`MARCH_SCALE`) en su propio render target y se compone a resolución completa con la ventana redondeada; si se siente pesado en equipos lentos, baja ese valor.
+- `src/ui/cats.js`: un gato SVG por sección (preloader, hero, menú, índice, cada empresa, cada capítulo y el footer). Siguen el cursor con los ojos, reaccionan a clics, cambios de logro y scroll, y se duermen tras 25 s sin actividad. Cambia variantes y nombres en `COMPANY_CATS` y en `installCats`.
 - `public/portrait.jpg`: retrato del hero; el encuadre se ajusta con `uCrop` en `stage.js`.
 
 Tipografía: Anybody (variable, `@fontsource-variable/anybody`). El eje de ancho hace de segunda familia: expandida y pesada para títulos y cifras, normal para lectura, condensada para etiquetas.

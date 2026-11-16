@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { corridorFragment, drumVertex, heroFragment, posterFragment, quadVertex } from './shaders.js';
+import { corridorCompositeFragment, corridorMarchFragment, drumVertex, heroFragment, posterFragment, quadVertex } from './shaders.js';
 import { POSTER_SIZE } from './posters.js';
 
 const PAPER = new THREE.Vector3(0.933, 0.941, 0.949);
@@ -11,6 +11,8 @@ const TINTS = {
 };
 const CAMERA_DISTANCE = 1200;
 const FLAT = 1e6;
+// The raymarched corridor renders at this fraction of CSS pixels and is upscaled in the composite.
+const MARCH_SCALE = 0.62;
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -29,25 +31,52 @@ export function createStage({ canvas, portrait, posters, reduced }) {
   const corridorEl = document.querySelector('[data-gl="corridor"]');
   const chapterTints = [...corridorEl.querySelectorAll('[data-tint]')].map((el) => TINTS[el.dataset.tint]);
 
-  // Full-screen paper + corridor window.
-  const corridor = new THREE.Mesh(
+  // Corridor: raymarched into its own low-resolution target, then composited full-screen with the
+  // paper background and the rounded window edge.
+  const marchTarget = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
+  const win = {
+    rect: new THREE.Vector4(),
+    corner: { value: 0 },
+  };
+  const march = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 2),
     new THREE.ShaderMaterial({
       vertexShader: quadVertex,
-      fragmentShader: corridorFragment,
+      fragmentShader: corridorMarchFragment,
       depthTest: false,
       depthWrite: false,
       uniforms: {
-        uRes: { value: new THREE.Vector2() },
-        uRect: { value: new THREE.Vector4() },
+        uToFull: { value: new THREE.Vector2(1, 1) },
+        uRect: { value: win.rect },
         uView: { value: new THREE.Vector3() },
-        uCorner: { value: 0 },
+        uCorner: win.corner,
         uOpen: { value: 0 },
         uTravel: { value: 0 },
         uTint: { value: chapterTints[0].clone() },
         uLook: { value: new THREE.Vector2() },
+        uTime: time,
+      },
+    }),
+  );
+  march.frustumCulled = false;
+  const marchScene = new THREE.Scene();
+  marchScene.add(march);
+
+  const corridor = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    new THREE.ShaderMaterial({
+      vertexShader: quadVertex,
+      fragmentShader: corridorCompositeFragment,
+      depthTest: false,
+      depthWrite: false,
+      uniforms: {
+        uRes: { value: new THREE.Vector2() },
+        uRect: { value: win.rect },
+        uCorner: win.corner,
         uPaper: { value: PAPER },
         uOn: { value: 0 },
+        uTime: time,
+        uTex: { value: marchTarget.texture },
       },
     }),
   );
@@ -130,6 +159,10 @@ export function createStage({ canvas, portrait, posters, reduced }) {
     viewport.value.set(vw, vh);
     const dpr = renderer.getPixelRatio();
     corridor.material.uniforms.uRes.value.set(vw * dpr, vh * dpr);
+    const mw = Math.max(1, Math.round(vw * MARCH_SCALE));
+    const mh = Math.max(1, Math.round(vh * MARCH_SCALE));
+    marchTarget.setSize(mw, mh);
+    march.material.uniforms.uToFull.value.set((vw * dpr) / mw, (vh * dpr) / mh);
   }
 
   function place(mesh, r) {
@@ -189,6 +222,7 @@ export function createStage({ canvas, portrait, posters, reduced }) {
 
     // Corridor window: grows from a card into the full viewport, then scrolls away at the end.
     const cu = corridor.material.uniforms;
+    const mu = march.material.uniforms;
     const cr = corridorEl.getBoundingClientRect();
     cu.uOn.value = cr.top < vh && cr.bottom > 0 ? 1 : 0;
     if (cu.uOn.value) {
@@ -215,21 +249,25 @@ export function createStage({ canvas, portrait, posters, reduced }) {
         hh = cr.bottom / 2;
         cy = cr.bottom / 2;
       }
-      cu.uRect.value.set((vw / 2) * dpr, (vh - cy) * dpr, hw * dpr, hh * dpr);
-      cu.uView.value.set((vw / 2) * dpr, (vh - viewCy) * dpr, viewH * dpr);
-      cu.uCorner.value = corner;
-      cu.uOpen.value = open;
-      cu.uTravel.value = ((vh - cr.top) / vh) * 2.4;
+      win.rect.set((vw / 2) * dpr, (vh - cy) * dpr, hw * dpr, hh * dpr);
+      mu.uView.value.set((vw / 2) * dpr, (vh - viewCy) * dpr, viewH * dpr);
+      win.corner.value = corner;
+      mu.uOpen.value = open;
+      mu.uTravel.value = ((vh - cr.top) / vh) * 2.4;
 
       const f = clamp((vh * 0.5 - cr.top) / cr.height, 0, 0.9999) * chapterTints.length - 0.5;
       const i0 = clamp(Math.floor(f), 0, chapterTints.length - 1);
       const i1 = clamp(i0 + 1, 0, chapterTints.length - 1);
       const k = f < 0 ? 0 : smooth(clamp((f - Math.floor(f) - 0.3) / 0.4, 0, 1));
-      cu.uTint.value.lerpVectors(chapterTints[i0], chapterTints[i1], k);
+      mu.uTint.value.lerpVectors(chapterTints[i0], chapterTints[i1], k);
 
       look.x += (look.tx - look.x) * 0.06;
       look.y += (look.ty - look.y) * 0.06;
-      cu.uLook.value.set(reduced ? 0 : look.x, reduced ? 0 : look.y);
+      mu.uLook.value.set(reduced ? 0 : look.x, reduced ? 0 : look.y);
+
+      renderer.setRenderTarget(marchTarget);
+      renderer.render(marchScene, camera);
+      renderer.setRenderTarget(null);
     } else {
       look.x = look.tx;
       look.y = look.ty;

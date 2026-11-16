@@ -49,6 +49,7 @@ export function renderCompanies(companies) {
           'aria-controls': `panel-${company.id}`,
           'aria-selected': String(i === 0),
           tabindex: i === 0 ? '0' : '-1',
+          style: `--i: ${i}`,
         },
         [el('span', { class: 'top-rank', text: rank(i) }), el('span', { class: 'top-title', text: a.title }), el('span', { class: 'top-value', text: a.short })],
       ),
@@ -57,12 +58,16 @@ export function renderCompanies(companies) {
     const panel = el('div', { class: 'achievement', role: 'tabpanel', id: `panel-${company.id}`, 'aria-labelledby': `tab-${company.id}-0`, tabindex: '0' });
     fillPanel(panel, company.achievements[0]);
 
+    const indicator = el('span', { class: 'top3-indicator', 'aria-hidden': 'true' });
     const article = el('article', { class: 'company', id: `c-${company.id}` }, [
       media,
       el('div', { class: 'company-meta' }, [
         el('div', { class: 'company-side' }, [
-          el('header', { class: 'company-head' }, [el('h3', { text: company.name }), el('p', { class: 'project-role', text: company.role })]),
-          el('div', { class: 'top3', role: 'tablist', 'aria-label': `Top ${company.achievements.length} en ${company.name}` }, tabs),
+          el('header', { class: 'company-head' }, [
+            el('h3', {}, [el('span', { class: 'reveal-line', text: company.name })]),
+            el('p', { class: 'project-role', text: company.role }),
+          ]),
+          el('div', { class: 'top3', role: 'tablist', 'aria-label': `Top ${company.achievements.length} en ${company.name}` }, [indicator, ...tabs]),
         ]),
         panel,
       ]),
@@ -70,6 +75,6 @@ export function renderCompanies(companies) {
     list.append(article);
     index.append(el('li', {}, [el('a', { href: `#c-${company.id}`, text: company.name })]));
 
-    return { company, article, media, tabs, panel };
+    return { company, article, media, tabs, panel, indicator };
   });
 }
