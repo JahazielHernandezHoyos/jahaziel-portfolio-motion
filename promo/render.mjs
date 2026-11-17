@@ -26,7 +26,7 @@ mkdirSync(OUT, { recursive: true });
 
 const browser = await launch();
 try {
-  const { page, cdp, js } = await openPage(browser, { width: 1080, height: 1920, scale: 1 });
+  const { page, cdp, js } = await openPage(browser, { width: 1920, height: 1080, scale: 1 });
   // The first visit can make Vite optimize new deps and reload the page; load twice to be safe.
   for (let i = 0; i < 2; i++) await page.goto(`${ORIGIN}/promo/compose.html?lang=${lang}`, { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => typeof window.setup === 'function' && typeof window.renderFrame === 'function');

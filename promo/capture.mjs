@@ -1,6 +1,6 @@
-// Films the real portfolio for the promo: each clip is an image sequence at 30 fps, 1080x1920
-// (the site's phone layout at 540x960 CSS px, 2x). Page time only advances between frames, so
-// WebGL, GSAP, Lenis and the cats move exactly 1/30 s per frame no matter how slow capture is.
+// Films the real portfolio for the promo: each clip is an image sequence at 30 fps, 1920x1080
+// (the site's desktop layout at 1440x810 CSS px, 4/3 device pixels). Page time only advances
+// between frames, so WebGL, GSAP and Lenis move exactly 1/30 s per frame.
 //
 //   npm run dev                          # in another terminal
 //   node promo/capture.mjs es|en [clip ...]
@@ -11,8 +11,9 @@ import { FPS, ORIGIN, launch, openPage, sleep } from './browser.mjs';
 const lang = process.argv[2] === 'en' ? 'en' : 'es';
 const OUT = new URL(`./build/clips-${lang}/`, import.meta.url).pathname;
 const HOME = lang === 'en' ? '/en/' : '/';
-const W = 540;
-const H = 960;
+const W = 1440;
+const H = 810;
+const SCALE = 4 / 3;
 
 // Each output frame is two 1/60 s steps: motion is sampled finely and the corridor's adaptive
 // resolution sees 60 fps, so it stays at full quality.
@@ -26,7 +27,6 @@ const waitBooted = async (js) => {
   }
   throw new Error('page did not finish booting');
 };
-const keys = (word) => word.split('').map((k) => `document.dispatchEvent(new KeyboardEvent('keydown',{key:'${k}',bubbles:true}));`).join('');
 const easeInOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
 
 const clips = {
@@ -76,15 +76,6 @@ const clips = {
     duration: 2.8,
   },
 
-  // Typing "miau" over the yellow poster makes it rain cats.
-  rain: {
-    path: HOME,
-    prep: [lenis(`scrollTo('#c-sena', { offset: -70, immediate: true })`)],
-    settle: 4000,
-    actions: [{ at: 0.15, js: keys(lang === 'en' ? 'meow' : 'miau') }],
-    duration: 3.4,
-  },
-
   // Case study: title decodes, metrics count up, then a slow scroll.
   case: {
     path: lang === 'en' ? '/en/cases/reads-71x/' : '/casos/lecturas-71x/',
@@ -106,7 +97,7 @@ async function capture(browser, name, clip) {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
 
-  const { page, cdp, js } = await openPage(browser, { width: W, height: H, scale: 2, clockOn: !!clip.clockOn });
+  const { page, cdp, js } = await openPage(browser, { width: W, height: H, scale: SCALE, clockOn: !!clip.clockOn });
   await page.goto(`${ORIGIN}${clip.path}`, { waitUntil: 'domcontentloaded' });
   if (!clip.clockOn) {
     if (clip.path === HOME) await waitBooted(js);
