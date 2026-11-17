@@ -425,4 +425,7 @@ function wireScramble() {
   document.querySelectorAll('main > :not(.hero) [data-scramble]').forEach((el) => io.observe(el));
 }
 
+// Dev-only handle for scripted captures (the promo video); stripped from production builds.
+if (import.meta.env.DEV) window.__portfolio = { scroller };
+
 boot();

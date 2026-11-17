@@ -5,3 +5,5 @@ dist/
 *.log
 .env*
 .vercel
+promo/build/
+promo/out/
